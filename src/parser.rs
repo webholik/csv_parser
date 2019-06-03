@@ -58,7 +58,7 @@ fn match_inside_quotes(i: &str) -> IResult<&str, String> {
     )(i)
 }
 
-fn csv(input: &str) -> Result<Vec<Vec<String>>, CSVError> {
+pub fn parse_csv(input: &str) -> Result<Vec<Vec<String>>, CSVError> {
     let mut out = Vec::new();
     let mut rest;
     let mut row;
@@ -147,10 +147,10 @@ fn many_cells_test() {
 }
 
 #[test]
-fn csv_test() {
+fn parse_csv_test() {
     let text = "\"ankit\", \"he\"\"llo\",8,9\n2,3,\"1\"\"\",5\n1,\"5\n\",\"6,9";
     assert_eq!(
-        csv(text),
+        parse_csv(text),
         Err(CSVError::UnequalColumns(SizeError {
             line_no: 3,
             expected_size: 4,
