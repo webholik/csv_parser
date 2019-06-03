@@ -10,16 +10,12 @@ use nom::multi::{fold_many0, separated_list};
 use nom::sequence::{delimited, preceded, terminated};
 use nom::eof;
 
-use crate::error::CSVError;
+use crate::error::{CSVError, SizeError};
 
 nom::named!(end_of_line<&str,&str>, eof!());
 
-fn consume_newlines(input: &str) -> Result<&str, CSVError> {
-    let a: IResult<&str, &str> = take_while(|c| c == '\n')(input);
-    match a {
-        Ok((r, v)) => Ok(r),
-        Err(_) => Err(CSVError::SyntaxError),
-    }
+fn consume_newlines(input: &str) -> IResult<&str, &str> {
+    take_while(|c| c == '\n')(input)
 }
 
 
@@ -72,7 +68,7 @@ fn csv(input: &str) -> Result<Vec<Vec<String>>, CSVError> {
             row = v;
         }
         Err(_) => {
-            return Err(CSVError::SyntaxError);
+            return Err(CSVError::SyntaxError(1));
         }
     }
 
@@ -80,19 +76,30 @@ fn csv(input: &str) -> Result<Vec<Vec<String>>, CSVError> {
     out.push(row);
 
     while rest.len() > 0 {
-        rest = consume_newlines(rest)?;
+        match consume_newlines(rest) {
+            Ok((r, _)) => {
+                rest = r;
+            }
+            Err(_) => {
+                return Err(CSVError::SyntaxError(out.len() + 1));
+            }
+        }
         match many_cells(rest) {
             Ok((r, v)) => {
                 rest = r;
                 row = v;
             }
             Err(e) => {
-                return Err(CSVError::SyntaxError);
+                return Err(CSVError::SyntaxError(out.len() + 1));
             }
         }
 
         if row.len() != len {
-            return Err(CSVError::UnequalColumns);
+            return Err(CSVError::UnequalColumns(SizeError {
+                line_no: out.len() + 1,
+                expected_size: len,
+                actual_size: row.len(),
+            }));
         } else {
             out.push(row);
         }
@@ -142,5 +149,12 @@ fn many_cells_test() {
 #[test]
 fn csv_test() {
     let text = "\"ankit\", \"he\"\"llo\",8,9\n2,3,\"1\"\"\",5\n1,\"5\n\",\"6,9";
-    assert_eq!(csv(text), Err(CSVError::UnequalColumns));
+    assert_eq!(
+        csv(text),
+        Err(CSVError::UnequalColumns(SizeError {
+            line_no: 3,
+            expected_size: 4,
+            actual_size: 3,
+        }))
+    );
 }
